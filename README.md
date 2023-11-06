@@ -1,0 +1,2 @@
+# Luau Interop
+This is a small project containing snippets for Luau interop patterns that are useful in a game engine. Included among these are a simple scheduler, signals + slots, and simple game object bindings.
