@@ -29,6 +29,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 target_sources(${PROJECT_NAME} PRIVATE
 	"${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/vector3_lua.cpp"
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

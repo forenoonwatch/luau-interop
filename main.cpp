@@ -12,6 +12,7 @@
 #include <unordered_map>
 
 #include <instance.hpp>
+#include <vector3_lua.hpp>
 
 void launch_script(lua_State* L, const char* chunkName, const char* data, size_t size) {
 	lua_State* T = lua_newthread(L);
@@ -307,6 +308,8 @@ int main() {
 	lua_pushcfunction(L, script_scheduler_wait, "script_scheduler_wait");
 	lua_setglobal(L, "wait");
 
+	vector3_lua_load(L);
+
 	luaL_sandbox(L);
 	luaL_sandboxthread(L);
 
@@ -324,7 +327,7 @@ int main() {
 	lua_pushnil(L);
 
 	while (lua_next(L, -2) != 0) {
-		printf("[SYSTEM]\t%x = %x\n", lua_tolightuserdata(L, -2), lua_touserdata(L, -1));
+		printf("[SYSTEM]\t%p = %p\n", lua_tolightuserdata(L, -2), lua_touserdata(L, -1));
 		lua_pop(L, 1);
 	}
 
