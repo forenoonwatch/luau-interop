@@ -11,6 +11,9 @@ event:Connect(function()
 	print("This is a callback")
 end)
 
+local mod = require("test_module")
+print("From module", mod.Value)
+
 print("Vector3.new is", typeof(Vector3.new(1, 2, 3)))
 print(Vector3.new(1, 2, 3) + Vector3.new(3, 2, 1))
 print(Vector3.new(3, 4, 0).Magnitude)

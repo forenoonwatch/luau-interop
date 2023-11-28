@@ -3,11 +3,12 @@
 #include <cstdlib>
 
 #include <lua.h>
-#include <luacode.h>
 #include <lualib.h>
+#include <Luau/Compiler.h>
 
 #include <chrono>
 #include <string>
+#include <optional>
 #include <vector>
 #include <unordered_map>
 
@@ -15,35 +16,127 @@
 #include <cframe_lua.hpp>
 #include <vector3_lua.hpp>
 
-void launch_script(lua_State* L, const char* chunkName, const char* data, size_t size) {
+static std::optional<std::string> load_file(const char* fileName) {
+	FILE* file = fopen(fileName, "rb");
+
+	if (!file) {
+		return std::nullopt;
+	}
+
+	fseek(file, 0, SEEK_END);
+	long fileSize = ftell(file);
+	if (fileSize < 0) {
+		fclose(file);
+		return std::nullopt;
+	}
+	rewind(file);
+
+	std::string result(fileSize, 0);
+	size_t read = fread(result.data(), 1, fileSize, file);
+	fclose(file);
+
+	if (read != static_cast<size_t>(fileSize)) {
+		return std::nullopt;
+	}
+
+	return result;
+}
+
+static void launch_script(lua_State* L, const char* chunkName, const std::string& bytecode) {
 	lua_State* T = lua_newthread(L);
-	luau_load(T, chunkName, data, size, 0);
 	luaL_sandboxthread(T);
+	
+	if (luau_load(T, chunkName, bytecode.data(), bytecode.size(), 0) != 0) {
+		printf("Failed to compile chunk %s\n", chunkName);
+		return;
+	}
 
 	if (auto res = lua_resume(T, L, 0); res != LUA_OK) {
-		puts(lua_tostring(T, -1));
+		printf("launch_script(%s): %s\n", chunkName, lua_tostring(T, -1));
 	}
 }
 
-void load_script(lua_State* L, const char* fileName) {
-	FILE* file = fopen(fileName, "rb");
-	fseek(file, 0, SEEK_END);
-	size_t fileSize = ftell(file);
-	rewind(file);
-
-	char* fileData = reinterpret_cast<char*>(malloc(fileSize));
-	fread(fileData, 1, fileSize, file);
-	fclose(file);
-
-	size_t bytecodeSize{};
-	char* bytecode = luau_compile(fileData, fileSize, nullptr, &bytecodeSize);
-	launch_script(L, fileName, bytecode, bytecodeSize);
-
-	free(fileData);
+static void load_script(lua_State* L, const char* fileName) {
+	if (auto fileData = load_file(fileName)) {
+		auto bytecode = Luau::compile(*fileData);
+		launch_script(L, fileName, bytecode);
+	}
+	else {
+		printf("Failed to load script file %s\n", fileName);
+	}
 }
 
-void cb_interrupt(lua_State* L, int gc) {
+static void cb_interrupt(lua_State* L, int gc) {
 	//printf("Got interrupt, gc = %d, lua_clock = %.2f\n", gc, lua_clock());
+}
+
+static int finish_require(lua_State* L) {
+	if (lua_isstring(L, -1)) {
+		lua_error(L);
+	}
+
+	return 1;
+}
+
+static int lua_require(lua_State* L) {
+	puts("Calling lua_require");
+	std::string name{luaL_checkstring(L, 1)};
+	std::string chunkName{"=" + name};
+
+	luaL_findtable(L, LUA_REGISTRYINDEX, "_MODULES", 1);
+
+	// return the module from the cache
+	lua_getfield(L, -1, name.c_str());
+	if (!lua_isnil(L, -1)) {
+		// L stack: _MODULES result
+		return finish_require(L);
+	}
+
+	lua_pop(L, 1);
+
+	auto path = std::string("../") + name + ".lua";
+	auto source = load_file(path.c_str());
+
+	if (!source) {
+		luaL_argerrorL(L, 1, ("error loading " + name).c_str());
+	}
+
+	// module needs to run in a new thread, isolated from the rest
+	// note: we create ML on main thread so that it doesn't inherit environment of L
+	lua_State* GL = lua_mainthread(L);
+	lua_State* ML = lua_newthread(GL);
+	lua_xmove(GL, L, 1);
+
+	// new thread needs to have the globals sandboxed
+	luaL_sandboxthread(ML);
+
+	auto bytecode = Luau::compile(*source);
+	if (luau_load(ML, chunkName.c_str(), bytecode.data(), bytecode.size(), 0) == 0) {
+		int status = lua_resume(ML, L, 0);
+
+		if (status == 0) {
+			if (lua_gettop(ML) == 0) {
+				lua_pushstring(ML, "module must return a value");
+			}
+			else if (!lua_istable(ML, -1) && !lua_isfunction(ML, -1)) {
+				lua_pushstring(ML, "module must return a table or function");
+			}
+		}
+		else if (status == LUA_YIELD) {
+			lua_pushstring(ML, "module can not yield");
+		}
+		else if (!lua_isstring(ML, -1)) {
+			lua_pushstring(ML, "unknown error while running module");
+		}
+	}
+
+	// there's now a return value on top of ML; L stack: _MODULES ML
+	lua_xmove(ML, L, 1);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -4, name.c_str());
+
+	// L stack: _MODULES ML result
+	return finish_require(L);
 }
 
 struct ScriptSignal {};
@@ -308,6 +401,9 @@ int main() {
 
 	lua_pushcfunction(L, script_scheduler_wait, "script_scheduler_wait");
 	lua_setglobal(L, "wait");
+
+	lua_pushcfunction(L, lua_require, "require");
+	lua_setglobal(L, "require");
 
 	vector3_lua_load(L);
 	cframe_lua_load(L);
