@@ -12,6 +12,7 @@
 #include <unordered_map>
 
 #include <instance.hpp>
+#include <cframe_lua.hpp>
 #include <vector3_lua.hpp>
 
 void launch_script(lua_State* L, const char* chunkName, const char* data, size_t size) {
@@ -309,6 +310,7 @@ int main() {
 	lua_setglobal(L, "wait");
 
 	vector3_lua_load(L);
+	cframe_lua_load(L);
 
 	luaL_sandbox(L);
 	luaL_sandboxthread(L);

@@ -102,6 +102,18 @@ class CFrame {
 			return CFrame(*this).inverse_self();
 		}
 
+		CFrame& lerp_self(const CFrame& goal, float alpha) {
+			m_columns[0] = glm::normalize(glm::mix(m_columns[0], goal.m_columns[0], alpha));
+			m_columns[1] = glm::normalize(glm::mix(m_columns[1], goal.m_columns[0], alpha));
+			m_columns[2] = glm::normalize(glm::mix(m_columns[2], goal.m_columns[0], alpha));
+			m_columns[3] = glm::mix(m_columns[3], goal.m_columns[0], alpha);
+			return *this;
+		}
+
+		CFrame lerp(const CFrame& goal, float alpha) const {
+			return CFrame(*this).lerp_self(goal, alpha);
+		}
+
 		 Vector3& operator[](size_t index) {
 			return m_columns[index];
 		}
@@ -136,6 +148,18 @@ class CFrame {
 
 		Vector3 look_vector() const {
 			return -m_columns[2];
+		}
+
+		const Vector3& x_vector() const {
+			return m_columns[0];
+		}
+
+		const Vector3& y_vector() const {
+			return m_columns[1];
+		}
+
+		const Vector3& z_vector() const {
+			return m_columns[2];
 		}
 
 		Vector3 get_scale() const {
@@ -206,7 +230,18 @@ class CFrame {
 inline CFrame operator*(const CFrame& a, const CFrame& b) {
 	auto result = a;
 	result *= b;
+	return result;
+}
 
+inline CFrame operator+(const CFrame& a, const Vector3& b) {
+	auto result = a;
+	result += b;
+	return result;
+}
+
+inline CFrame operator-(const CFrame& a, const Vector3& b) {
+	auto result = a;
+	result -= b;
 	return result;
 }
 

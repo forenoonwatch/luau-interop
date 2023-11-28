@@ -18,6 +18,9 @@ print(Vector3.new(1, 0, 0):Cross(Vector3.new(0, 1, 0)))
 print(Vector3.new(1, 0, 0):Lerp(Vector3.new(0, 1, 0), 0.5))
 print(Vector3.new(1, 0, 0):FuzzyEq(Vector3.new(1, 0, 0)))
 
+local cf = CFrame.fromAxisAngle(Vector3.new(1, 0, 0), 0.5 * math.pi)
+print("CFrame", cf)
+
 print('[getfenv] printing getfenv')
 table.foreach(getfenv(1), print)
 
