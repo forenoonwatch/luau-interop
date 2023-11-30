@@ -11,8 +11,6 @@
 using GetterFunction = void(*)(lua_State*, Instance*);
 using SetterFunction = void(*)(lua_State*, Instance*);
 
-// FIXME: Go away
-static int g_refInstanceLookup;
 static std::unordered_map<std::string, GetterFunction> g_instanceGetters{};
 static std::unordered_map<std::string, SetterFunction> g_instanceSetters{};
 static std::unordered_map<std::string, lua_CFunction> g_instanceMethods{};
@@ -37,31 +35,33 @@ static void instance_init_function_list();
 // Public Functions
 
 void instance_lua_load(lua_State* L) {
-	lua_newtable(L);
-	g_refInstanceLookup = lua_ref(L, -1);
-	lua_pop(L, 1);
-
 	luaL_findtable(L, LUA_GLOBALSINDEX, "Instance", 0);
 	lua_pushcfunction(L, instance_new, "instance_new");
 	lua_setfield(L, -2, "new");
 }
 
 void instance_lua_push(lua_State* L, Instance& inst) {
-}
+	auto* hInst = reinterpret_cast<std::shared_ptr<Instance>*>(lua_newuserdatadtor(L,
+			sizeof(std::shared_ptr<Instance>), instance_dtor));
+	std::construct_at(hInst, inst.shared_from_this());
 
-void instance_lua_print_refs(lua_State* L) {
-	puts("[SYSTEM] DEBUG PRINTING REFS");
+	if (luaL_newmetatable(L, "Instance")) {
+		lua_pushstring(L, "__tostring");
+		lua_pushcfunction(L, instance_tostring, "instance_tostring");
+		lua_rawset(L, -3);
 
-	lua_getref(L, g_refInstanceLookup);
+		lua_pushstring(L, "__index");
+		lua_pushcfunction(L, instance_index, "instance_index");
+		lua_rawset(L, -3);
 
-	lua_pushnil(L);
+		lua_pushstring(L, "__newindex");
+		lua_pushcfunction(L, instance_newindex, "instance_newindex");
+		lua_rawset(L, -3);
 
-	while (lua_next(L, -2) != 0) {
-		printf("[SYSTEM]\t%p = %p\n", lua_tolightuserdata(L, -2), lua_touserdata(L, -1));
-		lua_pop(L, 1);
+		lua_setreadonly(L, -1, true);
 	}
 
-	lua_pop(L, 1);
+	lua_setmetatable(L, -2);
 }
 
 // Static Functions
@@ -82,32 +82,8 @@ static int instance_new(lua_State* L) {
 		classID = InstanceClass::PART;
 	}
 
-	auto* hInst = reinterpret_cast<std::shared_ptr<Instance>*>(lua_newuserdatadtor(L,
-				sizeof(std::shared_ptr<Instance>), instance_dtor));
-	std::construct_at(hInst, Instance::create(classID));
-
-	lua_getref(L, g_refInstanceLookup);
-	lua_pushlightuserdata(L, hInst->get());
-	lua_pushvalue(L, -3);
-	lua_rawset(L, -3);
-	lua_pop(L, 1);
-
-	if (luaL_newmetatable(L, "Instance")) {
-		lua_pushstring(L, "__tostring");
-		lua_pushcfunction(L, instance_tostring, "instance_tostring");
-		lua_rawset(L, -3);
-
-		lua_pushstring(L, "__index");
-		lua_pushcfunction(L, instance_index, "instance_index");
-		lua_rawset(L, -3);
-
-		lua_pushstring(L, "__newindex");
-		lua_pushcfunction(L, instance_newindex, "instance_newindex");
-		lua_rawset(L, -3);
-	}
-
-	lua_setmetatable(L, -2);
-
+	auto inst = Instance::create(classID);
+	instance_lua_push(L, *inst);
 	return 1;
 }
 
@@ -212,19 +188,14 @@ static int instance_get_children(lua_State* L) {
 
 	lua_newtable(L);
 
-	lua_getref(L, g_refInstanceLookup);
-
 	int index = 1;
 
 	(*hInst)->for_each_child([&](auto& child) {
-		lua_pushlightuserdata(L, &child);
-		lua_rawget(L, -2);
-		lua_rawseti(L, -3, index);
+		instance_lua_push(L, child);
+		lua_rawseti(L, -2, index);
 
 		++index;
 	});
-
-	lua_pop(L, 1); // g_refInstanceLookup
 
 	return 1;
 }

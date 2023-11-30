@@ -31,8 +31,6 @@ int main() {
 	env.run_script_file("../test.lua");
 	env.script_signal_fire(sig);
 
-	instance_lua_print_refs(L);
-
 	auto start = high_resolution_clock::now();
 	double lastTime = 0.0;
 
