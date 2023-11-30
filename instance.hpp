@@ -1,49 +1,26 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 #include <instance_class.hpp>
 
-class Instance {
+class Instance : public std::enable_shared_from_this<Instance> {
 	public:
-		explicit Instance(InstanceClass classID)
-				: m_classID(classID) {}
+		static std::shared_ptr<Instance> create(InstanceClass);
 
-		void set_parent(Instance* newParent) {
-			if (newParent == m_parent || newParent == this) {
-				return;
-			}
+		explicit Instance(InstanceClass classID);
+		~Instance();
 
-			auto* oldParent = m_parent;
-			m_parent = newParent;
-
-			if (oldParent) {
-				if (oldParent->m_firstChild == this) {
-					oldParent->m_firstChild = m_nextChild;
-				}
-			}
-
-			if (newParent) {
-				if (newParent->m_lastChild) {
-					newParent->m_lastChild->m_nextChild = this;
-				}
-				else {
-					newParent->m_firstChild = this;
-				}
-
-				newParent->m_lastChild = this;
-			}
-
-			m_nextChild = nullptr;
-		}
+		void set_parent(Instance* newParent);
 
 		template <typename Functor>
 		void for_each_child(Functor&& func) {
-			auto pNextInstance = m_firstChild;
+			auto* pNextInstance = m_firstChild.get();
 
 			while (pNextInstance) {
 				func(*pNextInstance);
-				pNextInstance = pNextInstance->m_nextChild;
+				pNextInstance = pNextInstance->m_nextChild.get();
 			}
 		}
 
@@ -52,22 +29,16 @@ class Instance {
 			const_cast<Instance*>(this)->for_each_child(std::move(func));
 		}
 
-		const std::string& get_name() const {
-			return m_name;
-		}
+		const std::string& get_name() const;
+		void set_name(std::string name);
 
-		void set_name(std::string name) {
-			m_name = std::move(name);
-		}
-
-		InstanceClass get_class_id() const {
-			return m_classID;
-		}
+		InstanceClass get_class_id() const;
 	private:
-		Instance* m_parent = nullptr;
-		Instance* m_firstChild = nullptr;
-		Instance* m_nextChild = nullptr;
-		Instance* m_lastChild = nullptr;
+		std::weak_ptr<Instance> m_parent{};
+		std::shared_ptr<Instance> m_firstChild{};
+		std::shared_ptr<Instance> m_nextChild{};
+		std::weak_ptr<Instance> m_prevChild{};
+		std::weak_ptr<Instance> m_lastChild{};
 
 		std::string m_name = "Instance";
 		InstanceClass m_classID;

@@ -55,6 +55,15 @@ for _, v in pairs(inst:GetChildren()) do
 	print(v)
 end
 
+local function temp()
+	local itemp = Instance.new("Part")
+	itemp.Name = "TempInstance"
+end
+
+temp()
+
+collectgarbage()
+
 print("[do_thing] spawning coro")
 local coro = coroutine.create(do_thing)
 local succ, res = coroutine.resume(coro, 3, 2)

@@ -11,8 +11,6 @@
 #include <cstring>
 #include <optional>
 
-struct ScriptSignal {};
-
 namespace {
 
 struct ScriptConnection {
@@ -22,9 +20,12 @@ struct ScriptConnection {
 
 }
 
+static constexpr const int LUA_TAG_SCRIPT_SIGNAL = 2;
+
 // Global library functions
 static int lua_require(lua_State* L);
 static int lua_wait(lua_State* L);
+static int lua_collectgarbage(lua_State* L);
 
 static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal* pSignal);
 
@@ -49,6 +50,7 @@ ScriptEnvironment::ScriptEnvironment()
 	luaL_Reg funcs[] = {
 		{"require", lua_require},
 		{"wait", lua_wait},
+		{"collectgarbage", lua_collectgarbage},
 		{NULL, NULL},
 	};
 
@@ -88,28 +90,28 @@ void ScriptEnvironment::update(float deltaTime) {
 	}
 }
 
-ScriptSignal* ScriptEnvironment::script_signal_create() {
-	auto* s = reinterpret_cast<ScriptSignal*>(lua_newuserdata(m_L, sizeof(ScriptSignal)));
+ScriptSignal* ScriptEnvironment::script_signal_create(lua_State* L) {
+	auto* s = reinterpret_cast<ScriptSignal*>(lua_newuserdatatagged(L, 0, LUA_TAG_SCRIPT_SIGNAL));
 
-	if (luaL_newmetatable(m_L, "ScriptSignal")) {
-		lua_pushstring(m_L, "__index");
-		lua_pushvalue(m_L, -2);
-		lua_rawset(m_L, -3);
+	if (luaL_newmetatable(L, "ScriptSignal")) {
+		lua_pushstring(L, "__index");
+		lua_pushvalue(L, -2);
+		lua_rawset(L, -3);
 
-		lua_pushstring(m_L, "Connect");
-		lua_pushcfunction(m_L, script_signal_connect, "script_signal_connect");
-		lua_rawset(m_L, -3);
+		lua_pushstring(L, "Connect");
+		lua_pushcfunction(L, script_signal_connect, "script_signal_connect");
+		lua_rawset(L, -3);
 	}
 
-	lua_setmetatable(m_L, -2);
+	lua_setmetatable(L, -2);
 
-	lua_getref(m_L, m_refEventList);
+	lua_getref(L, m_refEventList);
 
-	lua_pushlightuserdata(m_L, s);
-	lua_newtable(m_L);
-	lua_rawset(m_L, -3);
+	lua_pushlightuserdata(L, s);
+	lua_newtable(L);
+	lua_rawset(L, -3);
 
-	lua_pop(m_L, 1);
+	lua_pop(L, 1);
 
 	return s;
 }
@@ -262,6 +264,22 @@ static int lua_wait(lua_State* L) {
 	return env->defer(L, waitTime);
 }
 
+static int lua_collectgarbage(lua_State* L) {
+	auto* option = luaL_optstring(L, 1, "collect");
+
+	if (strcmp(option, "collect") == 0) {
+		lua_gc(L, LUA_GCCOLLECT, 0);
+		return 0;
+	}
+	else if (strcmp(option, "count") == 0) {
+		lua_pushnumber(L, lua_gc(L, LUA_GCCOUNT, 0));
+		return 1;
+	}
+	
+	luaL_error(L, "collectgarbage must be called with 'count' or 'collect'");
+	return 0;
+}
+
 static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal* pSignal) {
 	auto* conn = reinterpret_cast<ScriptConnection*>(lua_newuserdata(L, sizeof(ScriptConnection)));
 	conn->pSignal = pSignal;
@@ -324,16 +342,14 @@ static int script_signal_connect(lua_State* L) {
 	int nargs = lua_gettop(L);
 
 	if (nargs != 2) {
-		// FIXME: figure out how to emit errors like the check* funcs
-		puts("Number of args is not correct");
+		luaL_error(L, "Invalid number of arguments: %d", nargs);
 		return 0;
 	}
 
 	auto* sig = reinterpret_cast<ScriptSignal*>(luaL_checkudata(L, 1, "ScriptSignal"));
 
 	if (!lua_isfunction(L, 2)) {
-		// FIXME: figure out how to emit errors like the check* funcs
-		puts("Passed parameter is not a function");
+		luaL_typeerrorL(L, 2, "function");
 		return 0;
 	}
 

@@ -21,7 +21,7 @@ class ScriptEnvironment final {
 
 		void update(float deltaTime);
 
-		ScriptSignal* script_signal_create();
+		ScriptSignal* script_signal_create(lua_State* L);
 		void script_signal_fire(ScriptSignal*);
 
 		bool run_script_file(const char* fileName);

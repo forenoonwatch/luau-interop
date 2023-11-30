@@ -26,8 +26,6 @@ static int cframe_inverse(lua_State* L);
 static int cframe_lerp(lua_State* L);
 static int cframe_get_components(lua_State* L);
 
-static int get_arg_count(lua_State* L);
-
 // Public Functions
 
 void cframe_lua_load(lua_State* L) {
@@ -106,7 +104,7 @@ const CFrame* cframe_lua_check(lua_State* L, int idx) {
 // Static Functions
 
 static int cframe_new(lua_State* L) {
-	auto argc = get_arg_count(L);
+	auto argc = lua_gettop(L);
 
 	switch (argc) {
 		case 0:
@@ -389,15 +387,5 @@ static int cframe_get_components(lua_State* L) {
 	}
 
 	return 12;
-}
-
-static int get_arg_count(lua_State* L) {
-	int arg = 1;
-
-	while (!lua_isnone(L, arg)) {
-		++arg;
-	}
-
-	return arg - 1;
 }
 
