@@ -52,6 +52,8 @@ void cframe_lua_load(lua_State* L) {
 
 	lua_pushcfunction(L, cframe_from_matrix, "fromMatrix");
 	lua_setfield(L, -2, "fromMatrix");
+
+	lua_pop(L, 1);
 }
 
 void cframe_lua_push(lua_State* L, const CFrame& cf) {

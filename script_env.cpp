@@ -95,6 +95,8 @@ bool ScriptEnvironment::run_script_bytecode(const char* chunkName, const std::st
 		return false;
 	}
 
+	lua_pop(m_L, 1);
+
 	return true;
 }
 

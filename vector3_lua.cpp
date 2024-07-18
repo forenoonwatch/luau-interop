@@ -27,6 +27,7 @@ void vector3_lua_load(lua_State* L) {
 	luaL_findtable(L, LUA_GLOBALSINDEX, "Vector3", 0);
 	lua_pushcfunction(L, vector3_new, "vector3_new");
 	lua_setfield(L, -2, "new");
+	lua_pop(L, 1);
 }
 
 void vector3_lua_push(lua_State* L, float x, float y, float z) {

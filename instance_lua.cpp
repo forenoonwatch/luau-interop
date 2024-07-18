@@ -38,6 +38,7 @@ void instance_lua_load(lua_State* L) {
 	luaL_findtable(L, LUA_GLOBALSINDEX, "Instance", 0);
 	lua_pushcfunction(L, instance_new, "instance_new");
 	lua_setfield(L, -2, "new");
+	lua_pop(L, 1);
 }
 
 void instance_lua_push(lua_State* L, Instance& inst) {
