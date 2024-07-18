@@ -41,6 +41,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 	"${CMAKE_CURRENT_SOURCE_DIR}/cframe_lua.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/vector3_lua.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/instance_lua.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/script_signal.cpp"
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

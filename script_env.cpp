@@ -11,29 +11,10 @@
 #include <cstring>
 #include <optional>
 
-namespace {
-
-struct ScriptConnection {
-	ScriptSignal* pSignal;
-	bool connected;
-};
-
-}
-
-static constexpr const int LUA_TAG_SCRIPT_SIGNAL = 2;
-
 // Global library functions
 static int lua_require(lua_State* L);
 static int lua_wait(lua_State* L);
 static int lua_collectgarbage(lua_State* L);
-
-static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal* pSignal);
-
-static int script_connection_disconnect(lua_State* L);
-static int script_connection_index(lua_State* L);
-static int script_connection_namecall(lua_State* L);
-
-static int script_signal_connect(lua_State* L);
 
 static void cb_interrupt(lua_State* L, int gc);
 
@@ -58,10 +39,6 @@ ScriptEnvironment::ScriptEnvironment()
 	luaL_register(m_L, NULL, funcs);
 	lua_pop(m_L, 1);
 
-	lua_newtable(m_L);
-	m_refEventList = lua_ref(m_L, -1);
-	lua_pop(m_L, 1);
-
 	luaL_openlibs(m_L);
 
 	vector3_lua_load(m_L);
@@ -78,62 +55,16 @@ ScriptEnvironment::~ScriptEnvironment() {
 }
 
 void ScriptEnvironment::update(float deltaTime) {
-	for (auto it = m_jobs.rbegin(), end = m_jobs.rend(); it != end; ++it) {
+	for (auto it = m_timeDelayedJobs.rbegin(), end = m_timeDelayedJobs.rend(); it != end; ++it) {
 		it->timeToRun -= deltaTime;
 
 		if (it->timeToRun <= 0.f) {
 			lua_resume(it->state, m_L, 0);
 
-			*it = std::move(m_jobs.back());
-			m_jobs.pop_back();
+			*it = std::move(m_timeDelayedJobs.back());
+			m_timeDelayedJobs.pop_back();
 		}
 	}
-}
-
-ScriptSignal* ScriptEnvironment::script_signal_create(lua_State* L) {
-	auto* s = reinterpret_cast<ScriptSignal*>(lua_newuserdatatagged(L, 0, LUA_TAG_SCRIPT_SIGNAL));
-
-	if (luaL_newmetatable(L, "ScriptSignal")) {
-		lua_pushstring(L, "__index");
-		lua_pushvalue(L, -2);
-		lua_rawset(L, -3);
-
-		lua_pushstring(L, "Connect");
-		lua_pushcfunction(L, script_signal_connect, "script_signal_connect");
-		lua_rawset(L, -3);
-	}
-
-	lua_setmetatable(L, -2);
-
-	lua_getref(L, m_refEventList);
-
-	lua_pushlightuserdata(L, s);
-	lua_newtable(L);
-	lua_rawset(L, -3);
-
-	lua_pop(L, 1);
-
-	return s;
-}
-
-void ScriptEnvironment::script_signal_fire(ScriptSignal* sig) {
-	lua_getref(m_L, m_refEventList);
-
-	lua_pushlightuserdata(m_L, sig);
-	lua_rawget(m_L, -2);
-
-	lua_pushnil(m_L);
-
-	while (lua_next(m_L, -2) != 0) {
-		lua_State* T = lua_newthread(m_L);
-		lua_pushvalue(m_L, -2);
-		lua_xmove(m_L, T, 1);
-		lua_resume(T, m_L, 0);
-
-		lua_pop(m_L, 2);
-	}
-
-	lua_pop(m_L, 1); // lua_getref
 }
 
 bool ScriptEnvironment::run_script_file(const char* fileName) {
@@ -159,7 +90,7 @@ bool ScriptEnvironment::run_script_bytecode(const char* chunkName, const std::st
 		return false;
 	}
 
-	if (auto res = lua_resume(T, m_L, 0); res != LUA_OK) {
+	if (auto res = lua_resume(T, m_L, 0); res != LUA_OK && res != LUA_YIELD) {
 		printf("launch_script(%s): %s\n", chunkName, lua_tostring(T, -1));
 		return false;
 	}
@@ -167,13 +98,44 @@ bool ScriptEnvironment::run_script_bytecode(const char* chunkName, const std::st
 	return true;
 }
 
-int ScriptEnvironment::defer(lua_State* T, float waitTime) {
-	m_jobs.push_back({T, waitTime});
+int ScriptEnvironment::delay(lua_State* T, float waitTime) {
+	m_timeDelayedJobs.emplace_back(T, waitTime);
 	return lua_yield(T, 0);
 }
 
-void ScriptEnvironment::get_ref_event_list(lua_State* L) {
-	lua_getref(L, m_refEventList);
+int ScriptEnvironment::defer(lua_State* T) {
+	return delay(T, 0);
+}
+
+int ScriptEnvironment::park(lua_State* T, const void* address) {
+	m_parkingLot[address].emplace_back(T);
+	return lua_yield(T, 0);
+}
+
+void ScriptEnvironment::unpark(const void* address) {
+	for (auto* T : m_parkingLot[address]) {
+		lua_resume(T, m_L, 0);
+	}
+
+	m_parkingLot[address].clear();
+}
+
+void ScriptEnvironment::unpark(const void* address, lua_State* L, int argCount) {
+	auto top = lua_gettop(L);
+
+	for (auto* T : m_parkingLot[address]) {
+		// Copy the parameters onto the top of the stack
+		for (int i = top - argCount + 1; i <= top; ++i) {
+			lua_pushvalue(L, i);
+		}
+
+		// Move the parameters onto T's stack
+		lua_xmove(L, T, argCount);
+
+		lua_resume(T, L, argCount);
+	}
+
+	m_parkingLot[address].clear();
 }
 
 lua_State* ScriptEnvironment::get_state() {
@@ -261,7 +223,7 @@ static int lua_wait(lua_State* L) {
 		waitTime = static_cast<float>(luaL_checknumber(L, 1));
 	}
 
-	return env->defer(L, waitTime);
+	return env->delay(L, waitTime);
 }
 
 static int lua_collectgarbage(lua_State* L) {
@@ -278,93 +240,6 @@ static int lua_collectgarbage(lua_State* L) {
 	
 	luaL_error(L, "collectgarbage must be called with 'count' or 'collect'");
 	return 0;
-}
-
-static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal* pSignal) {
-	auto* conn = reinterpret_cast<ScriptConnection*>(lua_newuserdata(L, sizeof(ScriptConnection)));
-	conn->pSignal = pSignal;
-	conn->connected = true;
-
-	if (luaL_newmetatable(L, "ScriptConnection")) {
-		lua_pushstring(L, "__index");
-		lua_pushcfunction(L, script_connection_index, "script_connection_index");
-		lua_rawset(L, -3);
-	}
-
-	lua_setmetatable(L, -2);
-
-	return conn;
-}
-
-static int script_connection_index(lua_State* L) {
-	auto* conn = reinterpret_cast<ScriptConnection*>(luaL_checkudata(L, 1, "ScriptConnection"));
-	const char* k = luaL_checkstring(L, 2);
-
-	if (!conn || !k) {
-		return 0;
-	}
-
-	if (strcmp("Connected", k) == 0) {
-		lua_pushboolean(L, conn->connected);
-		return 1;
-	}
-	else if (strcmp("Disconnect", k) == 0) {
-		lua_pushcfunction(L, script_connection_disconnect, "script_connection_disconnect");
-		return 1;
-	}
-
-	return 0;
-}
-
-static int script_connection_disconnect(lua_State* L) {
-	auto* env = ScriptEnvironment::get(L);
-	auto* conn = reinterpret_cast<ScriptConnection*>(luaL_checkudata(L, 1, "ScriptConnection"));
-
-	if (!(conn && conn->connected)) {
-		return 0;
-	}
-
-	conn->connected = false;
-
-	env->get_ref_event_list(L);
-	lua_pushlightuserdata(L, conn->pSignal);
-	lua_rawget(L, -2);
-
-	lua_pushvalue(L, 1);
-	lua_pushnil(L);
-	lua_rawset(L, -3);
-
-	return 0;
-}
-
-static int script_signal_connect(lua_State* L) {
-	auto* env = ScriptEnvironment::get(L);
-	int nargs = lua_gettop(L);
-
-	if (nargs != 2) {
-		luaL_error(L, "Invalid number of arguments: %d", nargs);
-		return 0;
-	}
-
-	auto* sig = reinterpret_cast<ScriptSignal*>(luaL_checkudata(L, 1, "ScriptSignal"));
-
-	if (!lua_isfunction(L, 2)) {
-		luaL_typeerrorL(L, 2, "function");
-		return 0;
-	}
-
-	env->get_ref_event_list(L);
-
-	lua_pushlightuserdata(L, sig);
-	lua_rawget(L, -2);
-
-	script_connection_create(L, sig);
-
-	lua_pushvalue(L, -1);
-	lua_pushvalue(L, 2);
-	lua_rawset(L, -4);
-
-	return 1;
 }
 
 static void cb_interrupt(lua_State* L, int gc) {

@@ -1,11 +1,10 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct lua_State;
-
-struct ScriptSignal;
 
 class ScriptEnvironment final {
 	public:
@@ -21,16 +20,43 @@ class ScriptEnvironment final {
 
 		void update(float deltaTime);
 
-		ScriptSignal* script_signal_create(lua_State* L);
-		void script_signal_fire(ScriptSignal*);
-
 		bool run_script_file(const char* fileName);
 		bool run_script_source_code(const char* chunkName, const std::string& fileData);
 		bool run_script_bytecode(const char* chunkName, const std::string& bytecode);
 
-		int defer(lua_State* T, float waitTime);
+		/**
+		 * Yields the given thread and delays its execution for `waitTime` seconds.
+		 *
+		 * @return result from lua_yield, to be returned by the caller.
+		 */
+		int delay(lua_State* T, float waitTime);
 
-		void get_ref_event_list(lua_State* L);
+		/**
+		 * Yields the given thread and delays its execution until the next call to `update()`.
+		 * Equivalent to `delay(T, 0)`.
+		 *
+		 * @return result from lua_yield, to be returned by the caller.
+		 */
+		int defer(lua_State* T);
+
+		/**
+		 * Yields the given thread T to be resumed when the given address is unparked.
+		 *
+		 * @return result from lua_yield, to be returned by the caller.
+		 */
+		int park(lua_State* T, const void* address);
+
+		/**
+		 * Resumes all threads waiting on the given address.
+		 */
+		void unpark(const void* address);
+
+		/**
+		 * Resumes all the threads waiting on the given address, with `L` as the resumption source,
+		 * and copying `argCount` args off of `L`'s stack as resumption parameters.
+		 */
+		void unpark(const void* address, lua_State* L, int argCount);
+
 		lua_State* get_state();
 	private:
 		struct ScheduledScript {
@@ -39,8 +65,8 @@ class ScriptEnvironment final {
 		};
 
 		lua_State* m_L;
-		int m_refEventList;
 		int m_refInstanceLookup;
-		std::vector<ScheduledScript> m_jobs;
+		std::vector<ScheduledScript> m_timeDelayedJobs;
+		std::unordered_map<const void*, std::vector<lua_State*>> m_parkingLot;
 };
 

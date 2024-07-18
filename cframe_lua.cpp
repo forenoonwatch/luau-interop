@@ -1,4 +1,5 @@
 #include "cframe_lua.hpp"
+#include "type_tags.hpp"
 
 #include <vector3_lua.hpp>
 

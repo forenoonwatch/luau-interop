@@ -10,6 +10,7 @@
 
 #include <script_env.hpp>
 #include <instance_lua.hpp>
+#include <script_signal.hpp>
 
 static std::atomic_flag g_finished = ATOMIC_FLAG_INIT;
 
@@ -25,11 +26,22 @@ int main() {
 
 	instance_lua_load(L);
 
-	auto* sig = env.script_signal_create(L);
+	ScriptSignal sig = script_signal_create(L);
 	lua_setglobal(L, "event");
 
-	env.run_script_file("../test.lua");
-	env.script_signal_fire(sig);
+	env.run_script_file("../test_signal.lua");
+
+	lua_pushinteger(L, 7);
+	lua_pushinteger(L, 8);
+	lua_pushstring(L, "Hey there");
+	script_signal_fire(L, sig, 3);
+
+	lua_pushinteger(L, 2);
+	lua_pushinteger(L, 1);
+	lua_pushstring(L, "Hello thar");
+	script_signal_fire(L, sig, 3);
+
+	//env.run_script_file("../test.lua");
 
 	auto start = high_resolution_clock::now();
 	double lastTime = 0.0;
