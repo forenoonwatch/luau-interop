@@ -11,6 +11,12 @@ local c3 = event:Connect(function(...)
 	print("Connect3:", ...)
 end)
 
+local c3 = event:Connect(function(...)
+	print("Connect3:", ...)
+end)
+
+print(c3.Connected)
+
 print("Wait:", event:Wait())
 
 print("Done running this")

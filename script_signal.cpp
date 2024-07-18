@@ -99,15 +99,16 @@ void script_signal_fire(lua_State* L, ScriptSignal signal, int argCount) {
 // ScriptSignal
 
 static int script_signal_namecall(lua_State* L) {
-	if (auto* name = lua_namecallatom(L, nullptr)) {
-		if (strcmp(name, "Connect") == 0) {
-			return script_signal_connect(L);
-		}
-		else if (strcmp(name, "Once") == 0) {
-			return script_signal_once(L);
-		}
-		else if (strcmp(name, "Wait") == 0) {
-			return script_signal_wait(L);
+	if (int atom; lua_namecallatom(L, &atom)) {
+		switch (atom) {
+			case 0:
+				return script_signal_connect(L);
+			case 1:
+				return script_signal_once(L);
+			case 2:
+				return script_signal_wait(L);
+			default:
+				break;
 		}
 	}
 
@@ -229,13 +230,15 @@ static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal sig
 
 static int script_connection_index(lua_State* L) {
 	auto* conn = reinterpret_cast<ScriptConnection*>(lua_touserdatatagged(L, 1, LUA_TAG_SCRIPT_CONNECTION));
-	const char* k = luaL_checkstring(L, 2);
+	int atom;
+	const char* k = lua_tostringatom(L, 2, &atom);
 
 	if (!conn || !k) {
+		luaL_error(L, "Invalid number of arguments %d\n", lua_gettop(L));
 		return 0;
 	}
 
-	if (strcmp("Connected", k) == 0) {
+	if (atom == 4) {
 		push_signal_table(L, conn->signal);
 		lua_pushlightuserdata(L, conn);
 		lua_rawget(L, -2);
@@ -249,10 +252,8 @@ static int script_connection_index(lua_State* L) {
 }
 
 static int script_connection_namecall(lua_State* L) {
-	if (auto* name = lua_namecallatom(L, nullptr)) {
-		if (strcmp(name, "Disconnect") == 0) {
-			return script_connection_disconnect(L);
-		}
+	if (int atom; lua_namecallatom(L, &atom) && atom == 3) {
+		return script_connection_disconnect(L);
 	}
 
 	luaL_error(L, "%s is not a valid method of ScriptConnection", luaL_checkstring(L, 1));
