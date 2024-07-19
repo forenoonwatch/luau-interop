@@ -34,15 +34,4 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 	CXX_EXTENSIONS OFF
 )
 
-target_sources(${PROJECT_NAME} PRIVATE
-	"${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/instance.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/script_env.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/cframe_lua.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/vector3_lua.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/instance_lua.cpp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/script_signal.cpp"
-)
-
-target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-
+add_subdirectory(src)
