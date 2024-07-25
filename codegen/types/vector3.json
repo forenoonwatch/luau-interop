@@ -1,0 +1,131 @@
+{
+	"schema_version": "1.0.0",
+	"name": "Vector3",
+	"type": "struct",
+	"description": "",
+	"native_include": "<vector3_lua.hpp>",
+	"is_lua_vector": true,
+	"properties": {
+		"X": {
+			"type": "float",
+			"read_only": true,
+			"skip_lua_codegen": true
+		},
+		"Y": {
+			"type": "float",
+			"read_only": true,
+			"skip_lua_codegen": true
+		},
+		"Z": {
+			"type": "float",
+			"read_only": true,
+			"skip_lua_codegen": true
+		},
+		"Magnitude": {
+			"type": "float",
+			"read_only": true,
+			"native_getter": "glm::length"
+		},
+		"Unit": {
+			"type": "Vector3",
+			"read_only": true,
+			"native_getter": "glm::normalize"
+		}
+	},
+	"functions": {
+	},
+	"constructors": {
+		"new": {
+			"parameters": [
+				{
+					"name": "x",
+					"type": "float",
+					"default": 0.0
+				},
+				{
+					"name": "y",
+					"type": "float",
+					"default": 0.0
+				},
+				{
+					"name": "z",
+					"type": "float",
+					"default": 0.0
+				}
+			]
+		}
+	},
+	"methods": {
+		"Cross": {
+			"parameters": [
+				{
+					"name": "other",
+					"type": "Vector3"
+				}
+			],
+			"return_types": ["Vector3"],
+			"native_free_function": "glm::cross"
+		},
+		"Dot": {
+			"parameters": [
+				{
+					"name": "other",
+					"type": "Vector3"
+				}
+			],
+			"return_types": ["float"],
+			"native_free_function": "glm::dot"
+		},
+		"FuzzyEq": {
+			"parameters": [
+				{
+					"name": "other",
+					"type": "Vector3"
+				},
+				{
+					"name": "epsilon",
+					"type": "float",
+					"default": 1.0e-5
+				}
+			],
+			"return_types": ["bool"],
+			"native_free_function": "fuzzy_eq"
+		},
+		"Lerp": {
+			"parameters": [
+				{
+					"name": "goal",
+					"type": "Vector3"
+				},
+				{
+					"name": "alpha",
+					"type": "float"
+				}
+			],
+			"return_types": ["Vector3"],
+			"native_free_function": "glm::mix"
+		},
+		"Max": {
+			"parameters": [
+				{
+					"name": "other",
+					"type": "Vector3"
+				}
+			],
+			"return_types": ["Vector3"],
+			"native_free_function": "glm::max"
+		},
+		"Min": {
+			"parameters": [
+				{
+					"name": "other",
+					"type": "Vector3"
+				}
+			],
+			"return_types": ["Vector3"],
+			"native_free_function": "glm::min"
+		}
+	},
+	"events": {
+	}
+}

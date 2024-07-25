@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.14)
 include(FetchContent)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 project(
 	TestLua VERSION 1.0
 	LANGUAGES CXX
@@ -35,3 +37,17 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 )
 
 add_subdirectory(src)
+
+include(GeneratorHelpers)
+
+gen_gather_interfaces(
+	"${PROJECT_SOURCE_DIR}/codegen"
+	"${PROJECT_SOURCE_DIR}/tools/gen_lua_bindings.py"
+	"${CMAKE_CURRENT_BINARY_DIR}/generated/lua_bindings.cpp"
+	""
+)
+
+target_sources(${PROJECT_NAME} PRIVATE ${INTERFACE_GENERATED_SOURCE_FILES})
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/generated)
+#add_custom_target(generatedfiles DEPENDS ${INTERFACE_GENERATED_SOURCE_FILES} ${INTERFACE_GENERATED_HEADER_FILES})
+#add_dependencies(${PROJECT_NAME} generatedfiles)

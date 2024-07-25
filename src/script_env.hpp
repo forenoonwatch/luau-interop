@@ -68,5 +68,7 @@ class ScriptEnvironment final {
 		int m_refInstanceLookup;
 		std::vector<ScheduledScript> m_timeDelayedJobs;
 		std::unordered_map<const void*, std::vector<lua_State*>> m_parkingLot;
+
+		static int16_t useratom(const char* s, size_t l);
 };
 

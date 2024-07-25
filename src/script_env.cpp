@@ -48,7 +48,7 @@ ScriptEnvironment::ScriptEnvironment()
 
 		printf("ERROR: no atom registered for %.*s!\n", (int)l, s);
 
-		return -1;
+		return useratom(s, l);
 	};
 	
 	luaL_Reg funcs[] = {
