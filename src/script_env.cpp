@@ -27,29 +27,7 @@ ScriptEnvironment* ScriptEnvironment::get(lua_State* L) {
 ScriptEnvironment::ScriptEnvironment()
 		: m_L(luaL_newstate()) {
 	//lua_callbacks(m_L)->interrupt = cb_interrupt;
-	lua_callbacks(m_L)->useratom = [](const char* s, size_t l) -> int16_t {
-		std::string_view sv(s, l);
-		
-		if (sv.compare("Connect") == 0) {
-			return 0;
-		}
-		else if (sv.compare("Once") == 0) {
-			return 1;
-		}
-		else if (sv.compare("Wait") == 0) {
-			return 2;
-		}
-		else if (sv.compare("Disconnect") == 0) {
-			return 3;
-		}
-		else if (sv.compare("Connected") == 0) {
-			return 4;
-		}
-
-		printf("ERROR: no atom registered for %.*s!\n", (int)l, s);
-
-		return useratom(s, l);
-	};
+	lua_callbacks(m_L)->useratom = ScriptEnvironment::useratom;
 	
 	luaL_Reg funcs[] = {
 		{"require", lua_require},

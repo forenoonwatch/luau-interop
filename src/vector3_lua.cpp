@@ -28,16 +28,3 @@ void vector3_lua_push(lua_State* L, const Vector3& v) {
 	vector3_lua_push(L, v.x, v.y, v.z);
 }
 
-const Vector3* vector3_lua_get(lua_State* L, int idx) {
-	return reinterpret_cast<const Vector3*>(lua_tovector(L, idx));
-}
-
-const Vector3* vector3_lua_check(lua_State* L, int idx) {
-	if (auto* result = vector3_lua_get(L, idx)) {
-		return result;
-	}
-
-	luaL_typeerrorL(L, idx, "Vector3");
-	return nullptr;
-}
-

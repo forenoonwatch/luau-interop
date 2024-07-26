@@ -26,7 +26,7 @@ int main() {
 
 	instance_lua_load(L);
 
-	ScriptSignal sig = script_signal_create(L);
+	ScriptSignal* sig = script_signal_create(L);
 	lua_setglobal(L, "event");
 
 	env.run_script_file("../test_signal.lua");

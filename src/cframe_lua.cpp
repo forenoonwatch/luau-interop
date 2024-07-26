@@ -1,6 +1,5 @@
 #include "cframe_lua.hpp"
-#include "type_tags.hpp"
-
+#include "script_common.hpp"
 #include <vector3_lua.hpp>
 
 #include <lua.h>
@@ -9,23 +8,20 @@
 #include <cstring>
 #include <cstdio>
 
+int cframe_lua_index(lua_State* L);
+int cframe_lua_namecall(lua_State* L);
+
 static int cframe_new(lua_State* L);
 static int cframe_look_at(lua_State* L);
 static int cframe_from_euler_angles_xyz(lua_State* L);
 static int cframe_from_axis_angle(lua_State* L);
 static int cframe_from_matrix(lua_State* L);
 
-static int cframe_index(lua_State* L);
 static int cframe_newindex(lua_State* L);
-static int cframe_namecall(lua_State* L);
 static int cframe_tostring(lua_State* L);
 static int cframe_mul(lua_State* L);
 static int cframe_add(lua_State* L);
 static int cframe_sub(lua_State* L);
-
-static int cframe_inverse(lua_State* L);
-static int cframe_lerp(lua_State* L);
-static int cframe_get_components(lua_State* L);
 
 // Public Functions
 
@@ -57,20 +53,21 @@ void cframe_lua_load(lua_State* L) {
 }
 
 void cframe_lua_push(lua_State* L, const CFrame& cf) {
-	auto* pCF = reinterpret_cast<CFrame*>(lua_newuserdatatagged(L, sizeof(CFrame), LUA_TAG_CFRAME));
+	auto* pCF = reinterpret_cast<CFrame*>(lua_newuserdatatagged(L, sizeof(CFrame),
+			LuaTypeTraits<CFrame>::TAG));
 	*pCF = cf;
 
 	if (luaL_newmetatable(L, "CFrame")) {
 		lua_pushstring(L, "CFrame");
 		lua_setfield(L, -2, "__type");
 
-		lua_pushcfunction(L, cframe_index, "__index");
+		lua_pushcfunction(L, cframe_lua_index, "cframe_lua_index");
 		lua_setfield(L, -2, "__index");
 
 		lua_pushcfunction(L, cframe_newindex, "__newindex");
 		lua_setfield(L, -2, "__newindex");
 
-		lua_pushcfunction(L, cframe_namecall, "__namecall");
+		lua_pushcfunction(L, cframe_lua_namecall, "cframe_lua_namecall");
 		lua_setfield(L, -2, "__namecall");
 
 		lua_pushcfunction(L, cframe_tostring, "__tostring");
@@ -91,19 +88,6 @@ void cframe_lua_push(lua_State* L, const CFrame& cf) {
 	lua_setmetatable(L, -2);
 }
 
-const CFrame* cframe_lua_get(lua_State* L, int idx) {
-	return reinterpret_cast<const CFrame*>(lua_touserdatatagged(L, idx, LUA_TAG_CFRAME));
-}
-
-const CFrame* cframe_lua_check(lua_State* L, int idx) {
-	if (auto* result = cframe_lua_get(L, idx)) {
-		return result;
-	}
-
-	luaL_typeerrorL(L, idx, "CFrame");
-	return nullptr;
-}
-
 // Static Functions
 
 static int cframe_new(lua_State* L) {
@@ -114,15 +98,15 @@ static int cframe_new(lua_State* L) {
 			cframe_lua_push(L, CFrame{1.f});
 			return 1;
 		case 1:
-			if (auto* pV = vector3_lua_check(L, 1)) {
+			if (auto* pV = lua_check<Vector3>(L, 1)) {
 				cframe_lua_push(L, CFrame{*pV});
 				return 1;
 			}
 			break;
 		case 2:
 		{
-			auto* pPos = vector3_lua_check(L, 1);
-			auto* pLook = vector3_lua_check(L, 2);
+			auto* pPos = lua_check<Vector3>(L, 1);
+			auto* pLook = lua_check<Vector3>(L, 2);
 
 			if (pPos && pLook) {
 				cframe_lua_push(L, CFrame::look_at(*pPos, *pLook));
@@ -168,14 +152,14 @@ static int cframe_new(lua_State* L) {
 }
 
 static int cframe_look_at(lua_State* L) {
-	auto* at = vector3_lua_check(L, 1);
-	auto* lookAt = vector3_lua_check(L, 2);
+	auto* at = lua_check<Vector3>(L, 1);
+	auto* lookAt = lua_check<Vector3>(L, 2);
 
 	if (!at || !lookAt) [[unlikely]] {
 		return 0;
 	}
 
-	if (auto* pUp = vector3_lua_get(L, 3)) {
+	if (auto* pUp = lua_get<Vector3>(L, 3)) {
 		cframe_lua_push(L, CFrame::look_at(*at, *lookAt, *pUp));
 	}
 	else {
@@ -195,7 +179,7 @@ static int cframe_from_euler_angles_xyz(lua_State* L) {
 }
 
 static int cframe_from_axis_angle(lua_State* L) {
-	auto* axis = vector3_lua_check(L, 1);
+	auto* axis = lua_check<Vector3>(L, 1);
 	auto angle = static_cast<float>(luaL_checknumber(L, 2));
 
 	if (!axis) [[unlikely]] {
@@ -207,15 +191,15 @@ static int cframe_from_axis_angle(lua_State* L) {
 }
 
 static int cframe_from_matrix(lua_State* L) {
-	auto* pos = vector3_lua_check(L, 1);
-	auto* vX = vector3_lua_check(L, 2);
-	auto* vY = vector3_lua_check(L, 3);
+	auto* pos = lua_check<Vector3>(L, 1);
+	auto* vX = lua_check<Vector3>(L, 2);
+	auto* vY = lua_check<Vector3>(L, 3);
 
 	if (!pos || !vX || !vY) [[unlikely]] {
 		return 0;
 	}
 
-	if (auto* vZ = vector3_lua_get(L, 4)) {
+	if (auto* vZ = lua_get<Vector3>(L, 4)) {
 		cframe_lua_push(L, CFrame{*pos, *vX, *vY, *vZ});
 	}
 	else {
@@ -227,7 +211,7 @@ static int cframe_from_matrix(lua_State* L) {
 }
 
 static int cframe_index(lua_State* L) {
-	auto* pCF = cframe_lua_get(L, 1);
+	auto* pCF = lua_get<CFrame>(L, 1);
 	const char* name = luaL_checkstring(L, 2);
 
 	if (strcmp(name, "X") == 0) {
@@ -276,25 +260,8 @@ static int cframe_newindex(lua_State* L) {
 	return 0;
 }
 
-static int cframe_namecall(lua_State* L) {
-	if (const char* name = lua_namecallatom(L, nullptr)) {
-		if (strcmp(name, "Inverse") == 0) {
-			return cframe_inverse(L);
-		}
-		else if (strcmp(name, "Lerp") == 0) {
-			return cframe_lerp(L);
-		}
-		else if (strcmp(name, "GetComponents") == 0 || strcmp(name, "components") == 0) {
-			return cframe_get_components(L);
-		}
-	}
-
-	luaL_error(L, "%s is not a valid method of CFrame", luaL_checkstring(L, 1));
-	return 0;
-}
-
 static int cframe_tostring(lua_State* L) {
-	auto& cf = *cframe_lua_get(L, 1);
+	auto& cf = *lua_get<CFrame>(L, 1);
 
 	char buffer[128];
 	auto len = std::snprintf(buffer, 128, "%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f", cf[3][0], cf[3][1],
@@ -305,17 +272,17 @@ static int cframe_tostring(lua_State* L) {
 }
 
 static int cframe_mul(lua_State* L) {
-	auto* self = cframe_lua_check(L, 1);
+	auto* self = lua_check<CFrame>(L, 1);
 
 	if (!self) [[unlikely]] {
 		return 0;
 	}
 
-	if (auto* other = cframe_lua_get(L, 2)) {
+	if (auto* other = lua_get<CFrame>(L, 2)) {
 		cframe_lua_push(L, *self * *other);
 		return 1;
 	}
-	else if (auto* other = vector3_lua_get(L, 2)) {
+	else if (auto* other = lua_get<Vector3>(L, 2)) {
 		vector3_lua_push(L, *self * *other);
 		return 1;
 	}
@@ -325,13 +292,13 @@ static int cframe_mul(lua_State* L) {
 }
 
 static int cframe_add(lua_State* L) {
-	auto* self = cframe_lua_check(L, 1);
+	auto* self = lua_check<CFrame>(L, 1);
 
 	if (!self) [[unlikely]] {
 		return 0;
 	}
 
-	if (auto* other = vector3_lua_get(L, 2)) {
+	if (auto* other = lua_get<Vector3>(L, 2)) {
 		cframe_lua_push(L, *self + *other);
 		return 1;
 	}
@@ -341,13 +308,13 @@ static int cframe_add(lua_State* L) {
 }
 
 static int cframe_sub(lua_State* L) {
-	auto* self = cframe_lua_check(L, 1);
+	auto* self = lua_check<CFrame>(L, 1);
 
 	if (!self) [[unlikely]] {
 		return 0;
 	}
 
-	if (auto* other = vector3_lua_get(L, 2)) {
+	if (auto* other = lua_get<Vector3>(L, 2)) {
 		cframe_lua_push(L, *self - *other);
 		return 1;
 	}
@@ -356,29 +323,8 @@ static int cframe_sub(lua_State* L) {
 	return 0;
 }
 
-static int cframe_inverse(lua_State* L) {
-	if (auto* cf = cframe_lua_check(L, 1)) [[likely]] {
-		cframe_lua_push(L, cf->inverse());
-	}
-
-	return 1;
-}
-
-static int cframe_lerp(lua_State* L) {
-	auto* cf = cframe_lua_check(L, 1);
-	auto* goal = cframe_lua_check(L, 2);
-	auto alpha = luaL_checknumber(L, 3);
-
-	if (!cf || !goal) [[unlikely]] {
-		return 0;
-	}
-
-	cframe_lua_push(L, cf->lerp(*goal, alpha));
-	return 1;
-}
-
-static int cframe_get_components(lua_State* L) {
-	auto* cf = reinterpret_cast<const float*>(lua_touserdatatagged(L, 1, LUA_TAG_CFRAME));
+int cframe_lua_get_components(lua_State* L) {
+	auto* cf = reinterpret_cast<const float*>(lua_touserdatatagged(L, 1, LuaTypeTraits<CFrame>::TAG));
 
 	if (!cf) [[unlikely]] {
 		luaL_typeerrorL(L, 1, "CFrame");

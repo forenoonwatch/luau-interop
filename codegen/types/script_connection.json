@@ -1,0 +1,22 @@
+{
+	"schema_version": "1.0.0",
+	"name": "ScriptConnection",
+	"native_include": "<script_signal.hpp>",
+	"properties": {
+		"Connected": {
+			"type": "bool",
+			"read_only": true,
+			"native_lua_function": "script_connection_connected"
+		}
+	},
+	"functions": {},
+	"constructors": {},
+	"methods": {
+		"Disconnect": {
+			"parameters": [],
+			"return_types": [],
+			"native_lua_function": "script_connection_disconnect"
+		}
+	},
+	"events": {}
+}

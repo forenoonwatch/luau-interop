@@ -114,11 +114,11 @@ class CFrame {
 			return CFrame(*this).lerp_self(goal, alpha);
 		}
 
-		 Vector3& operator[](size_t index) {
+		Vector3& operator[](size_t index) {
 			return m_columns[index];
 		}
 
-		 const Vector3& operator[](size_t index) const {
+		const Vector3& operator[](size_t index) const {
 			return m_columns[index];
 		}
 
@@ -160,6 +160,10 @@ class CFrame {
 
 		const Vector3& z_vector() const {
 			return m_columns[2];
+		}
+
+		CFrame rotation() const {
+			return CFrame(Vector3{}, m_columns[0], m_columns[1], m_columns[2]);
 		}
 
 		Vector3 get_scale() const {

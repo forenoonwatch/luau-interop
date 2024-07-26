@@ -6,6 +6,6 @@ struct lua_State;
 
 void cframe_lua_load(lua_State* L);
 void cframe_lua_push(lua_State* L, const CFrame&);
-const CFrame* cframe_lua_get(lua_State* L, int idx);
-const CFrame* cframe_lua_check(lua_State* L, int idx);
+
+int cframe_lua_get_components(lua_State* L);
 

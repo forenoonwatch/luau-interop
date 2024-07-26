@@ -1,0 +1,88 @@
+{
+	"schema_version": "1.0.0",
+	"name": "CFrame",
+	"type": "struct",
+	"description": "",
+	"native_include": "<cframe_lua.hpp>",
+	"properties": {
+		"X": {
+			"type": "float",
+			"read_only": true,
+			"native_getter": "get_position().x"
+		},
+		"Y": {
+			"type": "float",
+			"read_only": true,
+			"native_getter": "get_position().y"
+		},
+		"Z": {
+			"type": "float",
+			"read_only": true,
+			"native_getter": "get_position().z"
+		},
+		"Position": {
+			"type": "Vector3",
+			"read_only": true,
+			"native_getter": "get_position()"
+		},
+		"Rotation": {
+			"type": "CFrame",
+			"read_only": true,
+			"native_getter": "rotation()"
+		},
+		"LookVector": {
+			"type": "Vector3",
+			"read_only": true,
+			"native_getter": "look_vector()"
+		},
+		"RightVector": {
+			"type": "Vector3",
+			"read_only": true,
+			"native_getter": "right_vector()"
+		},
+		"UpVector": {
+			"type": "Vector3",
+			"read_only": true,
+			"native_getter": "up_vector()"
+		},
+		"ZVector": {
+			"type": "Vector3",
+			"read_only": true,
+			"native_getter": "z_vector()"
+		}
+	},
+	"functions": {},
+	"methods": {
+		"Inverse": {
+			"parameters": [],
+			"return_types": ["CFrame"],
+			"native_getter": "inverse"
+		},
+		"Lerp": {
+			"parameters": [
+				{
+					"name": "other",
+					"type": "CFrame"
+				},
+				{
+					"name": "goal",
+					"type": "float"
+				}
+			],
+			"return_types": ["CFrame"],
+			"native_getter": "lerp"
+		},
+		"GetComponents": {
+			"parameters": [],
+			"return_types": [],
+			"native_lua_function": "cframe_lua_get_components"
+		},
+		"components": {
+			"parameters": [],
+			"return_types": [],
+			"native_lua_function": "cframe_lua_get_components"
+		}
+	},
+	"constructors": {},
+	"events": {}
+}

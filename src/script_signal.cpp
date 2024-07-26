@@ -1,44 +1,36 @@
-#include "script_signal.hpp"
-#include "type_tags.hpp"
 #include "script_env.hpp"
+#include "script_common.hpp"
 
 #include <lualib.h>
 
 #include <cstring>
 #include <cstdio>
 
-namespace {
-
 struct ScriptConnection {
-	ScriptSignal signal;
+	ScriptSignal* signal;
 };
 
-}
+int script_signal_lua_namecall(lua_State* L);
 
-static int script_signal_namecall(lua_State* L);
-static int script_signal_connect(lua_State* L);
-static int script_signal_once(lua_State* L);
-static int script_signal_wait(lua_State* L);
+int script_connection_lua_index(lua_State* L);
+int script_connection_lua_namecall(lua_State* L);
 
 static int script_signal_once_wrapper(lua_State* L);
 
-static void push_signal_table(lua_State* L, ScriptSignal key);
+static void push_signal_table(lua_State* L, ScriptSignal* key);
 
-static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal signal);
-static int script_connection_disconnect(lua_State* L);
-static int script_connection_index(lua_State* L);
-static int script_connection_namecall(lua_State* L);
+static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal* signal);
 
 // Public Functions
 
-ScriptSignal script_signal_create(lua_State* L) {
-	auto* s = reinterpret_cast<ScriptSignal>(lua_newuserdatatagged(L, 0, LUA_TAG_SCRIPT_SIGNAL));
+ScriptSignal* script_signal_create(lua_State* L) {
+	auto* s = reinterpret_cast<ScriptSignal*>(lua_newuserdatatagged(L, 0, LuaTypeTraits<ScriptSignal>::TAG));
 
 	if (luaL_newmetatable(L, "ScriptSignal")) {
 		lua_pushstring(L, "ScriptSignal");
 		lua_setfield(L, -2, "__type");
 
-		lua_pushcfunction(L, script_signal_namecall, "script_signal_namecall");
+		lua_pushcfunction(L, script_signal_lua_namecall, "script_signal_lua_namecall");
 		lua_setfield(L, -2, "__namecall");
 
 		lua_setreadonly(L, -1, true);
@@ -50,18 +42,16 @@ ScriptSignal script_signal_create(lua_State* L) {
 	lua_createtable(L, 0, 0);
 	lua_rawset(L, LUA_REGISTRYINDEX);
 
-	//lua_pop(L, 1);
-
 	return s;
 }
 
-void script_signal_destroy(lua_State* L, ScriptSignal signal) {
+void script_signal_destroy(lua_State* L, ScriptSignal* signal) {
 	lua_pushlightuserdata(L, signal);
 	lua_pushnil(L);
 	lua_rawset(L, LUA_REGISTRYINDEX);
 }
 
-void script_signal_fire(lua_State* L, ScriptSignal signal, int argCount) {
+void script_signal_fire(lua_State* L, ScriptSignal* signal, int argCount) {
 	auto* env = ScriptEnvironment::get(L);
 	auto top = lua_gettop(L);
 
@@ -98,25 +88,7 @@ void script_signal_fire(lua_State* L, ScriptSignal signal, int argCount) {
 
 // ScriptSignal
 
-static int script_signal_namecall(lua_State* L) {
-	if (int atom; lua_namecallatom(L, &atom)) {
-		switch (atom) {
-			case 0:
-				return script_signal_connect(L);
-			case 1:
-				return script_signal_once(L);
-			case 2:
-				return script_signal_wait(L);
-			default:
-				break;
-		}
-	}
-
-	luaL_error(L, "%s is not a valid method of ScriptSignal", luaL_checkstring(L, 1));
-	return 0;
-}
-
-static int script_signal_connect(lua_State* L) {
+int script_signal_connect(lua_State* L) {
 	int nargs = lua_gettop(L);
 
 	if (nargs != 2) {
@@ -124,7 +96,7 @@ static int script_signal_connect(lua_State* L) {
 		return 0;
 	}
 
-	auto* s = reinterpret_cast<ScriptSignal>(lua_touserdatatagged(L, 1, LUA_TAG_SCRIPT_SIGNAL));
+	auto* s = lua_get<ScriptSignal>(L, 1);
 
 	if (!lua_isfunction(L, 2)) {
 		luaL_typeerrorL(L, 2, "function");
@@ -143,7 +115,7 @@ static int script_signal_connect(lua_State* L) {
 	return 1;
 }
 
-static int script_signal_once(lua_State* L) {
+int script_signal_once(lua_State* L) {
 	int nargs = lua_gettop(L);
 
 	if (nargs != 2) {
@@ -151,7 +123,7 @@ static int script_signal_once(lua_State* L) {
 		return 0;
 	}
 
-	auto* s = reinterpret_cast<ScriptSignal>(lua_touserdatatagged(L, 1, LUA_TAG_SCRIPT_SIGNAL));
+	auto* s = lua_get<ScriptSignal>(L, 1);
 
 	if (!lua_isfunction(L, 2)) {
 		luaL_typeerrorL(L, 2, "function");
@@ -173,17 +145,16 @@ static int script_signal_once(lua_State* L) {
 	return 1;
 }
 
-static int script_signal_wait(lua_State* L) {
+int script_signal_wait(lua_State* L) {
 	auto* env = ScriptEnvironment::get(L);
-	auto* s = reinterpret_cast<ScriptSignal>(lua_touserdatatagged(L, 1, LUA_TAG_SCRIPT_SIGNAL));
+	auto* s = lua_get<ScriptSignal>(L, 1);
 	return env->park(L, s);
 }
 
 static int script_signal_once_wrapper(lua_State* L) {
 	auto argCount = lua_gettop(L);
 
-	auto* conn = reinterpret_cast<ScriptConnection*>(lua_touserdatatagged(L, lua_upvalueindex(2),
-			LUA_TAG_SCRIPT_CONNECTION));
+	auto* conn = lua_get<ScriptConnection>(L, lua_upvalueindex(2));
 
 	push_signal_table(L, conn->signal);
 	lua_pushlightuserdata(L, conn);
@@ -200,26 +171,26 @@ static int script_signal_once_wrapper(lua_State* L) {
 	return 0;
 }
 
-static void push_signal_table(lua_State* L, ScriptSignal key) {
+static void push_signal_table(lua_State* L, ScriptSignal* key) {
 	lua_pushlightuserdata(L, key);
 	lua_rawget(L, LUA_REGISTRYINDEX);
 }
 
 // ScriptConnection
 
-static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal signal) {
+static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal* signal) {
 	auto* con = reinterpret_cast<ScriptConnection*>(lua_newuserdatatagged(L, sizeof(ScriptConnection),
-			LUA_TAG_SCRIPT_CONNECTION));
+			LuaTypeTraits<ScriptConnection>::TAG));
 	con->signal = signal;
 
 	if (luaL_newmetatable(L, "ScriptConnection")) {
 		lua_pushstring(L, "ScriptConnection");
 		lua_setfield(L, -2, "__type");
 
-		lua_pushcfunction(L, script_connection_index, "script_connection_index");
+		lua_pushcfunction(L, script_connection_lua_index, "script_connection_lua_index");
 		lua_setfield(L, -2, "__index");
 
-		lua_pushcfunction(L, script_connection_namecall, "script_connection_namecall");
+		lua_pushcfunction(L, script_connection_lua_namecall, "script_connection_lua_namecall");
 		lua_setfield(L, -2, "__namecall");
 	}
 
@@ -228,40 +199,19 @@ static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal sig
 	return con;
 }
 
-static int script_connection_index(lua_State* L) {
-	auto* conn = reinterpret_cast<ScriptConnection*>(lua_touserdatatagged(L, 1, LUA_TAG_SCRIPT_CONNECTION));
-	int atom;
-	const char* k = lua_tostringatom(L, 2, &atom);
+int script_connection_connected(lua_State* L) {
+	auto* conn = lua_get<ScriptConnection>(L, 1);
 
-	if (!conn || !k) {
-		luaL_error(L, "Invalid number of arguments %d\n", lua_gettop(L));
-		return 0;
-	}
+	push_signal_table(L, conn->signal);
+	lua_pushlightuserdata(L, conn);
+	lua_rawget(L, -2);
 
-	if (atom == 4) {
-		push_signal_table(L, conn->signal);
-		lua_pushlightuserdata(L, conn);
-		lua_rawget(L, -2);
-
-		lua_pushboolean(L, !lua_isnoneornil(L, -1));
-		return 1;
-	}
-
-	luaL_error(L, "%s is not a valid member of ScriptConnection", k);
-	return 0;
+	lua_pushboolean(L, !lua_isnoneornil(L, -1));
+	return 1;
 }
 
-static int script_connection_namecall(lua_State* L) {
-	if (int atom; lua_namecallatom(L, &atom) && atom == 3) {
-		return script_connection_disconnect(L);
-	}
-
-	luaL_error(L, "%s is not a valid method of ScriptConnection", luaL_checkstring(L, 1));
-	return 0;
-}
-
-static int script_connection_disconnect(lua_State* L) {
-	auto* conn = reinterpret_cast<ScriptConnection*>(lua_touserdatatagged(L, 1, LUA_TAG_SCRIPT_CONNECTION));
+int script_connection_disconnect(lua_State* L) {
+	auto* conn = lua_get<ScriptConnection>(L, 1);
 
 	push_signal_table(L, conn->signal);
 

@@ -44,7 +44,7 @@ gen_gather_interfaces(
 	"${PROJECT_SOURCE_DIR}/codegen"
 	"${PROJECT_SOURCE_DIR}/tools/gen_lua_bindings.py"
 	"${CMAKE_CURRENT_BINARY_DIR}/generated/lua_bindings.cpp"
-	""
+	"${CMAKE_CURRENT_BINARY_DIR}/generated/script_common.hpp"
 )
 
 target_sources(${PROJECT_NAME} PRIVATE ${INTERFACE_GENERATED_SOURCE_FILES})

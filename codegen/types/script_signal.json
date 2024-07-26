@@ -1,0 +1,36 @@
+{
+	"schema_version": "1.0.0",
+	"name": "ScriptSignal",
+	"native_include": "<script_signal.hpp>",
+	"properties": {},
+	"functions": {},
+	"constructors": {},
+	"methods": {
+		"Connect": {
+			"parameters": [
+				{
+					"name": "func",
+					"type": "function"
+				}
+			],
+			"return_types": ["ScriptConnection"],
+			"native_lua_function": "script_signal_connect"
+		},
+		"Once": {
+			"parameters": [
+				{
+					"name": "func",
+					"type": "function"
+				}
+			],
+			"return_types": ["ScriptConnection"],
+			"native_lua_function": "script_signal_once"
+		},
+		"Wait": {
+			"parameters": [],
+			"return_types": [],
+			"native_lua_function": "script_signal_wait"
+		}
+	},
+	"events": {}
+}
