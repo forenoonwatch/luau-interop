@@ -6,24 +6,15 @@
 #include <cstring>
 #include <cstdio>
 
-struct ScriptConnection {
-	ScriptSignal* signal;
-};
-
 int script_signal_lua_namecall(lua_State* L);
-
-int script_connection_lua_index(lua_State* L);
-int script_connection_lua_namecall(lua_State* L);
 
 static int script_signal_once_wrapper(lua_State* L);
 
 static void push_signal_table(lua_State* L, ScriptSignal* key);
 
-static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal* signal);
-
 // Public Functions
 
-ScriptSignal* script_signal_create(lua_State* L) {
+ScriptSignal* LuaPusher<ScriptSignal>::operator()(lua_State* L) {
 	auto* s = reinterpret_cast<ScriptSignal*>(lua_newuserdatatagged(L, 0, LuaTypeTraits<ScriptSignal>::TAG));
 
 	if (luaL_newmetatable(L, "ScriptSignal")) {
@@ -105,7 +96,7 @@ int script_signal_connect(lua_State* L) {
 
 	push_signal_table(L, s);
 
-	auto* conn = script_connection_create(L, s);
+	auto* conn = lua_push<ScriptConnection>(L, s);
 
 	// connections[signal] = args[2] (function)
 	lua_pushlightuserdata(L, conn);
@@ -132,7 +123,7 @@ int script_signal_once(lua_State* L) {
 
 	push_signal_table(L, s);
 
-	auto* conn = script_connection_create(L, s);
+	auto* conn = lua_push<ScriptConnection>(L, s);
 
 	// connections[signal] = args[2] (function)
 	lua_pushlightuserdata(L, conn);
@@ -177,27 +168,6 @@ static void push_signal_table(lua_State* L, ScriptSignal* key) {
 }
 
 // ScriptConnection
-
-static ScriptConnection* script_connection_create(lua_State* L, ScriptSignal* signal) {
-	auto* con = reinterpret_cast<ScriptConnection*>(lua_newuserdatatagged(L, sizeof(ScriptConnection),
-			LuaTypeTraits<ScriptConnection>::TAG));
-	con->signal = signal;
-
-	if (luaL_newmetatable(L, "ScriptConnection")) {
-		lua_pushstring(L, "ScriptConnection");
-		lua_setfield(L, -2, "__type");
-
-		lua_pushcfunction(L, script_connection_lua_index, "script_connection_lua_index");
-		lua_setfield(L, -2, "__index");
-
-		lua_pushcfunction(L, script_connection_lua_namecall, "script_connection_lua_namecall");
-		lua_setfield(L, -2, "__namecall");
-	}
-
-	lua_setmetatable(L, -2);
-
-	return con;
-}
 
 int script_connection_connected(lua_State* L) {
 	auto* conn = lua_get<ScriptConnection>(L, 1);

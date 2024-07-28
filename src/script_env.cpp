@@ -60,7 +60,7 @@ void ScriptEnvironment::update(float deltaTime) {
 		it->timeToRun -= deltaTime;
 
 		if (it->timeToRun <= 0.f) {
-			lua_resume(it->state, m_L, 0);
+			handle_resume(it->state, m_L, 0);
 
 			*it = std::move(m_timeDelayedJobs.back());
 			m_timeDelayedJobs.pop_back();
@@ -117,7 +117,7 @@ int ScriptEnvironment::park(lua_State* T, const void* address) {
 
 void ScriptEnvironment::unpark(const void* address) {
 	for (auto* T : m_parkingLot[address]) {
-		lua_resume(T, m_L, 0);
+		handle_resume(T, m_L, 0);
 	}
 
 	m_parkingLot[address].clear();
@@ -135,7 +135,7 @@ void ScriptEnvironment::unpark(const void* address, lua_State* L, int argCount) 
 		// Move the parameters onto T's stack
 		lua_xmove(L, T, argCount);
 
-		lua_resume(T, L, argCount);
+		handle_resume(T, L, argCount);
 	}
 
 	m_parkingLot[address].clear();
@@ -143,6 +143,14 @@ void ScriptEnvironment::unpark(const void* address, lua_State* L, int argCount) 
 
 lua_State* ScriptEnvironment::get_state() {
 	return m_L;
+}
+
+void ScriptEnvironment::handle_resume(lua_State* L, lua_State* from, int narg) {
+	int result = lua_resume(L, from, narg);
+
+	if (result != LUA_OK && result != LUA_YIELD) {
+		printf("[LUA ERROR]: %s\n", lua_tostring(L, -1));
+	}
 }
 
 // Static Functions

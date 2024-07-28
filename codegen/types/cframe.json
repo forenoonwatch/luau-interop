@@ -51,7 +51,82 @@
 			"native_getter": "z_vector()"
 		}
 	},
-	"functions": {},
+	"functions": {
+		"lookAt": {
+			"parameters": [
+				{
+					"name": "at",
+					"type": "Vector3"
+				},
+				{
+					"name": "lookAt",
+					"type": "Vector3"
+				},
+				{
+					"name": "up",
+					"type": "Vector3",
+					"default": "&VECTOR3_UP"
+				}
+			],
+			"return_types": ["CFrame"],
+			"native_free_function": "CFrame::look_at"
+		},
+		"fromAxisAngle": {
+			"parameters": [
+				{
+					"name": "v",
+					"type": "Vector3"
+				},
+				{
+					"name": "r",
+					"type": "float"
+				}
+			],
+			"return_types": ["CFrame"],
+			"native_free_function": "CFrame::from_axis_angle"
+		},
+		"fromEulerAnglesXYZ": {
+			"parameters": [
+				{
+					"name": "rx",
+					"type": "float"
+				},
+				{
+					"name": "ry",
+					"type": "float"
+				},
+				{
+					"name": "rz",
+					"type": "float"
+				}
+			],
+			"return_types": ["CFrame"],
+			"native_free_function": "CFrame::from_euler_angles_xyz",
+			"aliases": ["Angles", "fromOrientation"]
+		},
+		"fromMatrix": {
+			"parameters": [
+				{
+					"name": "pos",
+					"type": "Vector3"
+				},
+				{
+					"name": "vX",
+					"type": "Vector3"
+				},
+				{
+					"name": "vY",
+					"type": "Vector3"
+				},
+				{
+					"name": "vZ",
+					"type": "Vector3"
+				}
+			],
+			"return_types": ["CFrame"],
+			"native_lua_function": "cframe_lua_from_matrix"
+		}
+	},
 	"methods": {
 		"Inverse": {
 			"parameters": [],
@@ -75,14 +150,194 @@
 		"GetComponents": {
 			"parameters": [],
 			"return_types": [],
-			"native_lua_function": "cframe_lua_get_components"
-		},
-		"components": {
-			"parameters": [],
-			"return_types": [],
-			"native_lua_function": "cframe_lua_get_components"
+			"native_lua_function": "cframe_lua_get_components",
+			"aliases": ["components"]
 		}
 	},
-	"constructors": {},
+	"constructors": {
+		"new": {
+			"overloads": [
+				{
+					"parameters": [],
+					"native_free_function": "CFrame"
+				},
+				{
+					"parameters": [
+						{
+							"name": "pos",
+							"type": "Vector3"
+						}
+					],
+					"native_free_function": "CFrame"
+				},
+				{
+					"parameters": [
+						{
+							"name": "pos",
+							"type": "Vector3"
+						},
+						{
+							"name": "lookAt",
+							"type": "Vector3"
+						}
+					],
+					"native_free_function": "CFrame::look_at"
+				},
+				{
+					"parameters": [
+						{
+							"name": "x",
+							"type": "float"
+						},
+						{
+							"name": "y",
+							"type": "float"
+						},
+						{
+							"name": "z",
+							"type": "float"
+						}
+					],
+					"native_free_function": "CFrame"
+				},
+				{
+					"parameters": [
+						{
+							"name": "x",
+							"type": "float"
+						},
+						{
+							"name": "y",
+							"type": "float"
+						},
+						{
+							"name": "z",
+							"type": "float"
+						},
+						{
+							"name": "qX",
+							"type": "float"
+						},
+						{
+							"name": "qY",
+							"type": "float"
+						},
+						{
+							"name": "qZ",
+							"type": "float"
+						},
+						{
+							"name": "qW",
+							"type": "float"
+						}
+					],
+					"native_free_function": "CFrame"
+				},
+				{
+					"parameters": [
+						{
+							"name": "x",
+							"type": "float"
+						},
+						{
+							"name": "y",
+							"type": "float"
+						},
+						{
+							"name": "z",
+							"type": "float"
+						},
+						{
+							"name": "R00",
+							"type": "float"
+						},
+						{
+							"name": "R01",
+							"type": "float"
+						},
+						{
+							"name": "R02",
+							"type": "float"
+						},
+						{
+							"name": "R10",
+							"type": "float"
+						},
+						{
+							"name": "R11",
+							"type": "float"
+						},
+						{
+							"name": "R12",
+							"type": "float"
+						},
+						{
+							"name": "R20",
+							"type": "float"
+						},
+						{
+							"name": "R21",
+							"type": "float"
+						},
+						{
+							"name": "R22",
+							"type": "float"
+						}
+					],
+					"native_free_function": "CFrame"
+				}
+			]
+		}
+	},
+	"metamethods": {
+		"__tostring": {
+			"parameters": [],
+			"return_types": ["string"],
+			"native_lua_function": "cframe_lua_tostring"
+		},
+		"__mul": {
+			"overloads": [
+				{
+					"parameters": [
+						{
+							"name": "cf",
+							"type": "CFrame"
+						}
+					],
+					"return_types": ["CFrame"]
+				},
+				{
+					"parameters": [
+						{
+							"name": "v",
+							"type": "Vector3"
+						}
+					],
+					"return_types": ["Vector3"]
+				}
+			],
+			"native_lua_function": "cframe_lua_mul"
+		},
+		"__add": {
+			"parameters": [
+				{
+					"name": "v",
+					"type": "Vector3"
+				}
+			],
+			"return_types": ["CFrame"],
+			"native_free_function": "operator+"
+		},
+		"__sub": {
+			"parameters": [
+				{
+					"name": "v",
+					"type": "Vector3"
+				}
+			],
+			"return_types": ["CFrame"],
+			"native_free_function": "operator-"
+		}
+	},
 	"events": {}
 }

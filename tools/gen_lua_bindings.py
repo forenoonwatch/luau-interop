@@ -6,60 +6,30 @@ from codegen import Codegen
 keywordToStringAtom = dict()
 stringAtomCounter = 0
 
-scriptCommonFunctions = '''\
-template <typename T>
-struct LuaTypeGetter {
-	T* operator()(lua_State* L, int idx) {
-		return reinterpret_cast<T*>(lua_touserdatatagged(L, idx, LuaTypeTraits<T>::TAG));
-	}
-};
-
-template <typename>
-void lua_push(lua_State* L);
-
-template <typename T>
-decltype(auto) lua_get(lua_State* L, int idx) {
-	return LuaTypeGetter<T>{}(L, idx);
-}
-
-template <typename T>
-decltype(auto) lua_check(lua_State* L, int idx) {
-    auto* result = LuaTypeGetter<T>{}(L, idx);
-
-	if (!result) {
-        luaL_typeerrorL(L, idx, LuaTypeTraits<T>::NAME.data());
-	}
-
-	return result;
-}
-
-template <typename T>
-decltype(auto) lua_opt(lua_State* L, int idx, auto* defaultValue) {
-    if (auto* result = LuaTypeGetter<T>{}(L, idx)) {
-        return result;
-    }
-    else {
-        return defaultValue;
-    }
-}
-'''
+def add_atom(key):
+    global stringAtomCounter
+    keywordToStringAtom[key] = stringAtomCounter
+    stringAtomCounter += 1
 
 def init_string_atoms_for_list(nameList):
-    global stringAtomCounter
-
-    for key in nameList:
+    for key, value in nameList.items():
         if not key in keywordToStringAtom:
-            keywordToStringAtom[key] = stringAtomCounter
-            stringAtomCounter += 1
+            add_atom(key)
+
+        if 'aliases' in value:
+            for alias in value['aliases']:
+                add_atom(alias)
 
 def init_keyword_to_string_atom():
     for name, data in codegen.typeDataByName.items():
         filteredProperties = [key for key, value in data['properties'].items() if 'skip_lua_codegen' not in value or not value['skip_lua_codegen']]
 
-        init_string_atoms_for_list(filteredProperties)
-        init_string_atoms_for_list(data['functions'].keys())
-        init_string_atoms_for_list(data['methods'].keys())
-        init_string_atoms_for_list(data['events'].keys())
+        for key in filteredProperties:
+            add_atom(key)
+
+        init_string_atoms_for_list(data['functions'])
+        init_string_atoms_for_list(data['methods'])
+        init_string_atoms_for_list(data['events'])
 
 def gen_useratom(outFile):
     pairs = []
@@ -85,12 +55,13 @@ def gen_useratom(outFile):
         '}\n\n'
     ))
 
-def gen_native_get_function(data, outFile):
-    functionName = Codegen.format_method_name(data['name']) + '_lua_get'
-
-def gen_function_wrapper_for_type(data, outFile, funcName, funcData, isMethod, isConstructor):
+def gen_single_function_wrapper_for_type(data, outFile, funcName, funcData, isMethod, isConstructor,
+        argCount=None):
     if 'native_free_function' in funcData or 'native_getter' in funcData or isConstructor:
-        wrapperFunctionName = Codegen.format_method_name(data['name']) + '_lua_' + funcName.lower() + '_wrapper'
+        wrapperFunctionName = Codegen.get_function_wrapper_name(data['name'], funcName)
+
+        if argCount is not None:
+            wrapperFunctionName += '_' + str(argCount)
 
         outFile.write(f"static int {wrapperFunctionName}(lua_State* L) " '{\n')
 
@@ -104,15 +75,14 @@ def gen_function_wrapper_for_type(data, outFile, funcName, funcData, isMethod, i
             if 'native_free_function' in funcData:
                 args.append('*self')
 
-        for i in range(len(funcData['parameters'])):
-            paramData = funcData['parameters'][i]
+        for i, paramData in enumerate(funcData['parameters']):
             stackIndex = i + 2 if isMethod else i + 1
 
             if 'default' in paramData:
                 optExpr = Codegen.get_optional_expression(paramData['type'], paramData['name'], stackIndex,
                         paramData['default'])
                 outFile.write(f"\t{optExpr}\n")
-                args.append(paramData['name'])
+                args.append(paramData['name'] if Codegen.is_core_type(paramData['type']) else '*' + paramData['name'])
             else:
                 checkExpr = Codegen.get_check_expression(paramData['type'], paramData['name'], stackIndex)
                 outFile.write(f"\t{checkExpr}\n")
@@ -148,6 +118,44 @@ def gen_function_wrapper_for_type(data, outFile, funcName, funcData, isMethod, i
         outFile.write(';\n\treturn 1;\n')
         outFile.write('}\n\n')
 
+def gen_overload_function_wrapper_for_type(data, outFile, funcName, funcData, isMethod, isConstructor):
+    if 'native_lua_function' in funcData:
+        return
+
+    for overloadData in funcData['overloads']:
+        argCount = len(overloadData['parameters'])
+        gen_single_function_wrapper_for_type(data, outFile, funcName, overloadData, isMethod, isConstructor,
+                argCount)
+
+    wrapperFunctionName = Codegen.get_function_wrapper_name(data['name'], funcName)
+
+    outFile.write((
+        f"static int {wrapperFunctionName}(lua_State* L) " '{\n'
+        '\tint argc = lua_gettop(L);\n\n'
+        '\tswitch (argc) {\n'
+    ))
+
+    for overloadData in funcData['overloads']:
+        argCount = len(overloadData['parameters'])
+        outFile.write((
+            f"\t\tcase {argCount}:\n"
+            f"\t\t\treturn {wrapperFunctionName}_{argCount}(L);\n"
+        ))
+
+    outFile.write((
+        '\t\tdefault:\n'
+        '\t\t\tluaL_error(L, "Invalid number of arguments: %d", argc);\n'
+        '\t}\n\n'
+        '\treturn 0;\n'
+        '}\n\n'
+    ))
+
+def gen_function_wrapper_for_type(data, outFile, funcName, funcData, isMethod, isConstructor):
+    if 'overloads' in funcData:
+        gen_overload_function_wrapper_for_type(data, outFile, funcName, funcData, isMethod, isConstructor)
+    else:
+        gen_single_function_wrapper_for_type(data, outFile, funcName, funcData, isMethod, isConstructor)
+
 def gen_function_wrappers_for_type(data, outFile):
     for methodName, methodData in data['methods'].items():
         gen_function_wrapper_for_type(data, outFile, methodName, methodData, True, False)
@@ -157,6 +165,10 @@ def gen_function_wrappers_for_type(data, outFile):
 
     for funcName, funcData in data['constructors'].items():
         gen_function_wrapper_for_type(data, outFile, funcName, funcData, False, True)
+
+    if 'metamethods' in data:
+        for funcName, funcData in data['metamethods'].items():
+            gen_function_wrapper_for_type(data, outFile, funcName, funcData, True, False)
 
 def gen_index_for_type(data, outFile):
     if not data['properties']:
@@ -239,13 +251,16 @@ def gen_namecall_for_type(data, outFile):
             continue
 
         atomVarName = 'LUA_ATOM_' + Codegen.format_constant_name(methodName)
-        wrapperFunctionName = Codegen.format_method_name(data['name']) + '_lua_' + methodName.lower() + '_wrapper'
+        wrapperFunctionName = Codegen.get_function_wrapper_name(data['name'], methodName)
         wrapperFunctionName = methodData['native_lua_function'] if 'native_lua_function' in methodData else wrapperFunctionName
 
-        cases.append((
-            f"\t\tcase {atomVarName}:\n"
-            f"\t\t\treturn {wrapperFunctionName}(L);\n"
-        ))
+        mainCase = f"\t\tcase {atomVarName}:\n"
+
+        if 'aliases' in methodData:
+            mainCase += ''.join([f"\t\tcase LUA_ATOM_{Codegen.format_constant_name(alias)}:\n"
+                    for alias in methodData['aliases']])
+
+        cases.append(mainCase + f"\t\t\treturn {wrapperFunctionName}(L);\n")
 
     outFile.write(''.join(cases))
 
@@ -258,6 +273,25 @@ def gen_namecall_for_type(data, outFile):
         '}\n\n'
     ))
 
+def push_static_functions(typeName, funcList, outFile):
+    for funcName, funcData in funcList.items():
+        nativeFuncName = Codegen.get_function_wrapper_name(typeName, funcName)
+
+        if 'native_lua_function' in funcData:
+            nativeFuncName = funcData['native_lua_function']
+
+        outFile.write((
+            f"\tlua_pushcfunction(L, {nativeFuncName}, \"{nativeFuncName}\");\n"
+            f"\tlua_setfield(L, -2, \"{funcName}\");\n"
+        ))
+
+        if 'aliases' in funcData:
+            for alias in funcData['aliases']:
+                outFile.write((
+                    f"\tlua_pushcfunction(L, {nativeFuncName}, \"{nativeFuncName}\");\n"
+                    f"\tlua_setfield(L, -2, \"{alias}\");\n"
+                ))
+
 def gen_library_load_for_type(data, outFile):
     if not data['constructors'] and not data['functions']:
         return
@@ -269,24 +303,102 @@ def gen_library_load_for_type(data, outFile):
         f"\tluaL_findtable(L, LUA_GLOBALSINDEX, \"{data['name']}\", 0);" '\n\n'
     ))
 
-    for funcName in data['constructors'].keys():
-        nativeFuncName = Codegen.format_method_name(data['name']) + '_lua_' + funcName.lower() + '_wrapper'
-        outFile.write((
-            f"\tlua_pushcfunction(L, {nativeFuncName}, \"{nativeFuncName}\");\n"
-            f"\tlua_setfield(L, -2, \"{funcName}\");\n"
-        ))
-
-    for funcName in data['functions'].keys():
-        nativeFuncName = Codegen.format_method_name(data['name']) + '_lua_' + funcName.lower() + '_wrapper'
-        outFile.write((
-            f"\tlua_pushcfunction(L, {nativeFuncName}, \"{nativeFuncName}\");\n"
-            f"\tlua_setfield(L, -2, \"{funcName}\");\n"
-        ))
+    push_static_functions(data['name'], data['constructors'], outFile)
+    push_static_functions(data['name'], data['functions'], outFile)
 
     outFile.write((
         '\n\tlua_pop(L, 1);\n'
         '}\n\n'
     ))
+
+def gen_metamethod_init_for_type(data, outFile):
+    if 'has_native_pusher' in data and data['has_native_pusher']:
+        return
+
+    metamethods = []
+
+    indexFunctionName = Codegen.format_method_name(data['name']) + '_lua_index'
+    namecallFunctionName = Codegen.format_method_name(data['name']) + '_lua_namecall'
+
+    outFile.write((
+        f"void LuaPusher<{data['name']}>::init_metatable(lua_State* L) " '{\n'
+    ))
+
+    metamethods.append((
+        f"\t\tlua_pushstring(L, \"{data['name']}\");\n"
+        '\t\tlua_setfield(L, -2, "__type");\n'
+    ))
+
+    if data['properties']:
+        metamethods.append((
+            f"\t\tlua_pushcfunction(L, {indexFunctionName}, \"{indexFunctionName}\");\n"
+            '\t\tlua_setfield(L, -2, "__index");\n'
+        ))
+
+    if data['methods']:
+        metamethods.append((
+            f"\t\tlua_pushcfunction(L, {namecallFunctionName}, \"{namecallFunctionName}\");\n"
+            '\t\tlua_setfield(L, -2, "__namecall");\n'
+        ))
+
+    if 'metamethods' in data and data['metamethods']:
+        for funcName, funcData in data['metamethods'].items():
+            nativeFuncName = Codegen.get_function_wrapper_name(data['name'], funcName)
+
+            if 'native_lua_function' in funcData:
+                nativeFuncName = funcData['native_lua_function']
+
+            metamethods.append((
+                f"\t\tlua_pushcfunction(L, {nativeFuncName}, \"{nativeFuncName}\");\n"
+                f"\t\tlua_setfield(L, -2, \"{funcName}\");\n"
+            ))
+
+    outFile.write(f"\tif (luaL_newmetatable(L, \"{data['name']}\")) " '{\n')
+
+    metamethods.append('\t\tlua_setreadonly(L, -1, true);\n')
+    outFile.write('\n'.join(metamethods))
+
+    outFile.write((
+        '\t}\n\n'
+        '\tlua_setmetatable(L, -2);\n'
+        '}\n\n'
+    ))
+
+def gen_push_for_type(data, outFile):
+    if 'has_native_pusher' in data and data['has_native_pusher']:
+        return
+
+    outFile.write((
+        'template <>\n'
+        f"struct LuaPusher<{data['name']}> " '{\n'
+        '\tvoid init_metatable(lua_State* L);\n\n'
+    ))
+
+    if Codegen.is_vector(data):
+        outFile.write((
+            '\tvoid operator()(lua_State* L, float x, float y, float z) {\n'
+            '\t\tlua_pushvector(L, x, y, z);\n'
+            '\t\tinit_metatable(L);\n'
+            '\t}\n\n'
+            f"\tvoid operator()(lua_State* L, const {data['name']}& v)" '{\n'
+            '\t\treturn operator()(L, v[0], v[1], v[2]);\n'
+            '\t}\n'
+        ))
+    else:
+        outFile.write((
+            '\ttemplate <typename... Args>\n'
+            f"\t{data['name']}* operator()(lua_State* L, Args&&... args) " '{\n'
+            f"\t\tauto* pObj = reinterpret_cast<{data['name']}*>(lua_newuserdatatagged(L, sizeof({data['name']}), LuaTypeTraits<{data['name']}>::TAG));\n"
+            f"\t\tpObj = std::construct_at<{data['name']}>(pObj, std::forward<Args>(args)...);\n\n"
+            '\t\tif (!pObj) [[unlikely]] {\n'
+            '\t\t\treturn nullptr;\n'
+            '\t\t}\n\n'
+            '\t\tinit_metatable(L);\n\n'
+            '\t\treturn pObj;\n'
+            '\t}\n'
+        ))
+
+    outFile.write('};\n\n')
 
 def gen_code_for_types(outFile):
     for data in codegen.typeDataByName.values():
@@ -294,6 +406,7 @@ def gen_code_for_types(outFile):
         gen_index_for_type(data, outFile)
         gen_namecall_for_type(data, outFile)
         gen_library_load_for_type(data, outFile)
+        gen_metamethod_init_for_type(data, outFile)
 
 def gen_source_file(outFile):
     outFile.write((
@@ -311,6 +424,7 @@ def gen_source_file(outFile):
 def gen_header_file(outFile):
     outFile.write((
         '#pragma once\n\n'
+        '#include <script_fwd.hpp>\n\n'
         '#include <cstdint>\n\n'
         '#include <string_view>\n\n'
     ))
@@ -320,11 +434,6 @@ def gen_header_file(outFile):
     for atomName, value in keywordToStringAtom.items():
         atomVarName = 'LUA_ATOM_' + Codegen.format_constant_name(atomName)
         outFile.write(f"constexpr const int16_t {atomVarName} = {value};\n")
-
-    outFile.write((
-        '\ntemplate <typename>\n'
-        'struct LuaTypeTraits;\n\n'
-    ))
 
     for data in codegen.typeDataByName.values():
         tagValue = codegen.tagValueByName[data['name']]
@@ -337,7 +446,7 @@ def gen_header_file(outFile):
             '};\n\n'
         ))
 
-    outFile.write(scriptCommonFunctions)
+        gen_push_for_type(data, outFile)
 
 def main():
     if len(sys.argv) != 3:

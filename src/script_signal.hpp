@@ -1,11 +1,18 @@
 #pragma once
 
-struct lua_State;
+#include <script_fwd.hpp>
 
-struct ScriptConnection;
 struct ScriptSignal;
 
-ScriptSignal* script_signal_create(lua_State* L);
+struct ScriptConnection {
+	ScriptSignal* signal;
+};
+
+template <>
+struct LuaPusher<ScriptSignal> {
+	ScriptSignal* operator()(lua_State* L);
+};
+
 void script_signal_destroy(lua_State* L, ScriptSignal*);
 void script_signal_fire(lua_State* L, ScriptSignal*, int argCount);
 

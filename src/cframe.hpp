@@ -25,6 +25,9 @@ class CFrame {
 		CFrame(float x, float y, float z)
 				: m_columns{{1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, 1.f}, {x, y, z}} {}
 
+		CFrame(float x, float y, float z, float qX, float qY, float qZ, float qW)
+				: CFrame(Vector3(x, y, z), Quaternion(qW, qX, qY, qZ)) {}
+
 		template <typename Vec3>
 		explicit CFrame(Vec3 pos)
 				: m_columns{{1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, 1.f}, std::forward<Vec3>(pos)} {}

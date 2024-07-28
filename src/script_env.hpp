@@ -69,6 +69,8 @@ class ScriptEnvironment final {
 		std::vector<ScheduledScript> m_timeDelayedJobs;
 		std::unordered_map<const void*, std::vector<lua_State*>> m_parkingLot;
 
+		void handle_resume(lua_State* L, lua_State* from, int narg);
+
 		static int16_t useratom(const char* s, size_t l);
 };
 
